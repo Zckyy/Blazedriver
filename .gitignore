@@ -1,0 +1,19 @@
+# Build output
+x64/
+out/
+*.obj
+*.pdb
+*.log
+*.sys
+*.tlog
+*.recipe
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.ipch
+*.vsidx
+*.backup.json

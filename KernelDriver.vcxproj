@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  KernelDriver.vcxproj
+  ─────────────────────────────────────────────────────────────────────────────
+  Visual Studio Enterprise 2026 (v18.x)  |  WDK 10.0.28000.0  |  Windows 11
+  Toolset : WindowsApplicationForDrivers10.0
+  Load via KDMapper — no signing required.
+
+  Key notes:
+  - WDK WDM props force EntryPoint = GsDriverEntry (a /GS wrapper that calls
+    your DriverEntry). This is correct — keep DriverEntry in your .c file.
+  - BufferOverflowK.lib provides GsDriverEntry; must be linked explicitly when
+    DDK_LIB_PATH is not resolved by the toolset automatically.
+  - All WDK km include/lib paths are hard-coded so they resolve regardless of
+    whether the toolset injects them.
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <!-- ── Globals ───────────────────────────────────────────────────────────── -->
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    <TargetName>BlazeDriver</TargetName>
+    <TargetExt>.sys</TargetExt>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <PlatformToolset>WindowsApplicationForDrivers10.0</PlatformToolset>
+    <WindowsTargetPlatformVersion>10.0.28000.0</WindowsTargetPlatformVersion>
+    <WDKBuildFolder>10.0.28000.0</WDKBuildFolder>
+    <SignMode>Off</SignMode>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <DriverTargetPlatform>Desktop</DriverTargetPlatform>
+    <OutDir>$(SolutionDir)x64\Debug\</OutDir>
+    <IntDir>$(ProjectDir)x64\Debug\</IntDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <DriverTargetPlatform>Desktop</DriverTargetPlatform>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <OutDir>$(SolutionDir)x64\Release\</OutDir>
+    <IntDir>$(ProjectDir)x64\Release\</IntDir>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+
+  <!-- ── Hard-coded WDK paths (guarantees resolution when DDK_LIB_PATH is empty) -->
+  <PropertyGroup>
+    <WDKRoot>C:\Program Files (x86)\Windows Kits\10\</WDKRoot>
+    <WDKVer>10.0.28000.0</WDKVer>
+    <WDKIncKM>$(WDKRoot)Include\$(WDKVer)\km</WDKIncKM>
+    <WDKIncShared>$(WDKRoot)Include\$(WDKVer)\shared</WDKIncShared>
+    <WDKIncUM>$(WDKRoot)Include\$(WDKVer)\um</WDKIncUM>
+    <WDKLibKM>$(WDKRoot)Lib\$(WDKVer)\km\x64</WDKLibKM>
+  </PropertyGroup>
+
+  <!-- ── Compiler ──────────────────────────────────────────────────────────── -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <ExceptionHandling>false</ExceptionHandling>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <!-- BufferSecurityCheck ON: required because WDM entry point is GsDriverEntry -->
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <AdditionalIncludeDirectories>$(WDKIncKM);$(WDKIncShared);$(WDKIncUM);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization>
+      <PreprocessorDefinitions>_AMD64_;_KERNEL_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DisableSpecificWarnings>4100;4127;4201;4214</DisableSpecificWarnings>
+    </ClCompile>
+
+    <!-- ── Linker ─────────────────────────────────────────────────────────── -->
+    <Link>
+      <!--
+        GsDriverEntry is the real entry point injected by BufferOverflowK.lib.
+        It wraps your DriverEntry with /GS cookie init. This is what the WDK
+        WDM props set, so we match it here explicitly.
+      -->
+      <EntryPointSymbol>GsDriverEntry</EntryPointSymbol>
+
+      <AdditionalLibraryDirectories>$(WDKLibKM);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+
+      <!--
+        Required kernel libs:
+          ntoskrnl.lib    - NT kernel exports (MmCopyVirtualMemory, etc.)
+          hal.lib         - Hardware Abstraction Layer (KeGetCurrentIrql etc.)
+          wmilib.lib      - WMI support (required by WDM link model)
+          BufferOverflowK.lib - provides GsDriverEntry (/GS wrapper)
+      -->
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;wmilib.lib;BufferOverflowK.lib;%(AdditionalDependencies)</AdditionalDependencies>
+
+      <NoDefaultLibName>true</NoDefaultLibName>
+      <SubSystem>Native</SubSystem>
+      <Driver>WDM</Driver>
+      <!-- Force the output filename to BlazeDriver.sys -->
+      <OutputFile>$(OutDir)BlazeDriver.sys</OutputFile>
+      <GenerateDebugInformation Condition="'$(Configuration)'=='Debug'">true</GenerateDebugInformation>
+      <GenerateDebugInformation Condition="'$(Configuration)'=='Release'">false</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- ── Source files ──────────────────────────────────────────────────────── -->
+  <ItemGroup>
+    <ClCompile Include="Driver.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Driver.h" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+
+</Project>
